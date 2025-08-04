@@ -51,16 +51,11 @@ fetch_single_pokemon() {
 # Function to fetch Pokémon data in parallel
 fetch_pokemon_parallel() {
     local pokemon_name=$1
-    local pid_file="/tmp/pokemon_${pokemon_name}.pid"
     
     # Start the fetch process in background
     fetch_single_pokemon "$pokemon_name" &
-    local pid=$!
     
-    # Save PID to file for tracking
-    echo $pid > "$pid_file"
-    
-    echo "[${pokemon_name}] Started with PID: $pid"
+    echo "[${pokemon_name}] Started with job ID: $!"
 }
 
 # Main execution
@@ -79,24 +74,30 @@ echo ""
 echo "All background processes started. Waiting for completion..."
 
 # Wait for all background processes to complete
-for pokemon in "${pokemon_list[@]}"; do
-    pid_file="/tmp/pokemon_${pokemon}.pid"
-    if [ -f "$pid_file" ]; then
-        pid=$(cat "$pid_file")
-        echo "[${pokemon}] Waiting for PID $pid to complete..."
-        wait $pid
-        exit_code=$?
-        
-        if [ $exit_code -eq 0 ]; then
-            echo "[${pokemon}] Process completed successfully ✅"
-        else
-            echo "[${pokemon}] Process failed with exit code $exit_code ❌"
-        fi
-        
-        # Clean up PID file
-        rm -f "$pid_file"
-    fi
-done
+echo ""
+echo "Current background jobs:"
+jobs
+
+echo ""
+echo "Waiting for all background jobs to complete..."
+
+# Wait for all background jobs to complete
+wait
+
+echo ""
+echo "All background jobs completed. Final job status:"
+jobs
+
+# Check if any jobs are still running and kill them if necessary
+if jobs | grep -q "Running"; then
+    echo "Some jobs are still running. Terminating remaining jobs..."
+    kill %1 2>/dev/null
+    kill %2 2>/dev/null
+    kill %3 2>/dev/null
+    kill %4 2>/dev/null
+    kill %5 2>/dev/null
+    echo "All jobs terminated."
+fi
 
 echo ""
 echo "Parallel retrieval completed!"
