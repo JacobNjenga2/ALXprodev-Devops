@@ -1,10 +1,14 @@
 #!/bin/bash
 
-# Batch Pokémon Data Retrieval Script
+# Batch Pokémon Data Retrieval Script with Error Handling and Retry Logic
 # Loops through a list of Pokémon and retrieves data from the API
 
 # Create pokemon_data directory if it doesn't exist
 mkdir -p pokemon_data
+
+# Create error log file
+ERROR_LOG="pokemon_errors.log"
+echo "Pokémon API Error Log - $(date)" > "$ERROR_LOG"
 
 # List of Pokémon to fetch
 pokemon_list=("bulbasaur" "ivysaur" "venusaur" "charmander" "charmeleon")
@@ -12,20 +16,36 @@ pokemon_list=("bulbasaur" "ivysaur" "venusaur" "charmander" "charmeleon")
 # Base API URL
 API_BASE_URL="https://pokeapi.co/api/v2/pokemon"
 
-# Function to fetch Pokémon data
+# Maximum number of retry attempts
+MAX_RETRIES=3
+
+# Function to fetch Pokémon data with retry logic
 fetch_pokemon_data() {
     local pokemon_name=$1
     local output_file="pokemon_data/${pokemon_name}.json"
+    local retry_count=0
+    local success=false
     
     echo "Fetching data for ${pokemon_name}..."
     
-    # Make API request and save to file
-    if curl -s -f "${API_BASE_URL}/${pokemon_name}" > "$output_file" 2>/dev/null; then
-        echo "Saved data to ${output_file} ✅"
-    else
-        echo "Error: Failed to fetch data for ${pokemon_name}"
-        return 1
-    fi
+    # Retry loop
+    while [ $retry_count -lt $MAX_RETRIES ] && [ "$success" = false ]; do
+        # Make API request and save to file
+        if curl -s -f "${API_BASE_URL}/${pokemon_name}" > "$output_file" 2>/dev/null; then
+            echo "Saved data to ${output_file} ✅"
+            success=true
+        else
+            retry_count=$((retry_count + 1))
+            if [ $retry_count -lt $MAX_RETRIES ]; then
+                echo "Attempt ${retry_count} failed for ${pokemon_name}. Retrying in 2 seconds..."
+                sleep 2
+            else
+                echo "Error: Failed to fetch data for ${pokemon_name} after ${MAX_RETRIES} attempts ❌"
+                echo "$(date): Failed to fetch data for ${pokemon_name} after ${MAX_RETRIES} attempts" >> "$ERROR_LOG"
+                return 1
+            fi
+        fi
+    done
 }
 
 # Main execution
@@ -40,4 +60,14 @@ for pokemon in "${pokemon_list[@]}"; do
     fi
 done
 
-echo "Batch retrieval completed!" 
+echo "Batch retrieval completed!"
+
+# Display error summary if any errors occurred
+if [ -s "$ERROR_LOG" ] && [ "$(wc -l < "$ERROR_LOG")" -gt 1 ]; then
+    echo ""
+    echo "Error Summary:"
+    echo "Some Pokémon data could not be retrieved. Check ${ERROR_LOG} for details."
+else
+    echo ""
+    echo "All Pokémon data retrieved successfully! 🎉"
+fi 
