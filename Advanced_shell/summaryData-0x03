@@ -44,9 +44,9 @@ cat "$CSV_FILE"
 
 echo ""
 
-# Calculate and display averages using awk
-awk -F',' '
-    NR > 1 {  # Skip header row
+# Calculate and display averages using awk and sed
+cat "$CSV_FILE" | sed '1d' | awk -F',' '
+    {
         height_sum += $2
         weight_sum += $3
         count++
@@ -59,4 +59,4 @@ awk -F',' '
             printf "Average Weight: %.2f kg\n", avg_weight
         }
     }
-' "$CSV_FILE" 
+' 
