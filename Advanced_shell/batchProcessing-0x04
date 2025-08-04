@@ -1,0 +1,124 @@
+#!/bin/bash
+
+# Parallel Pokémon Data Retrieval Script
+# Fetches data for multiple Pokémon in parallel using background processes
+
+# Create pokemon_data directory if it doesn't exist
+mkdir -p pokemon_data
+
+# Create error log file
+ERROR_LOG="pokemon_parallel_errors.log"
+echo "Parallel Pokémon API Error Log - $(date)" > "$ERROR_LOG"
+
+# List of Pokémon to fetch
+pokemon_list=("bulbasaur" "ivysaur" "venusaur" "charmander" "charmeleon")
+
+# Base API URL
+API_BASE_URL="https://pokeapi.co/api/v2/pokemon"
+
+# Maximum number of retry attempts
+MAX_RETRIES=3
+
+# Function to fetch a single Pokémon's data
+fetch_single_pokemon() {
+    local pokemon_name=$1
+    local output_file="pokemon_data/${pokemon_name}.json"
+    local retry_count=0
+    local success=false
+    
+    echo "[${pokemon_name}] Starting fetch..."
+    
+    # Retry loop
+    while [ $retry_count -lt $MAX_RETRIES ] && [ "$success" = false ]; do
+        # Make API request and save to file
+        if curl -s -f "${API_BASE_URL}/${pokemon_name}" > "$output_file" 2>/dev/null; then
+            echo "[${pokemon_name}] Saved data to ${output_file} ✅"
+            success=true
+        else
+            retry_count=$((retry_count + 1))
+            if [ $retry_count -lt $MAX_RETRIES ]; then
+                echo "[${pokemon_name}] Attempt ${retry_count} failed. Retrying in 1 second..."
+                sleep 1
+            else
+                echo "[${pokemon_name}] Error: Failed after ${MAX_RETRIES} attempts ❌"
+                echo "$(date): Failed to fetch data for ${pokemon_name} after ${MAX_RETRIES} attempts" >> "$ERROR_LOG"
+                return 1
+            fi
+        fi
+    done
+}
+
+# Function to fetch Pokémon data in parallel
+fetch_pokemon_parallel() {
+    local pokemon_name=$1
+    local pid_file="/tmp/pokemon_${pokemon_name}.pid"
+    
+    # Start the fetch process in background
+    fetch_single_pokemon "$pokemon_name" &
+    local pid=$!
+    
+    # Save PID to file for tracking
+    echo $pid > "$pid_file"
+    
+    echo "[${pokemon_name}] Started with PID: $pid"
+}
+
+# Main execution
+echo "Starting parallel Pokémon data retrieval..."
+echo "Fetching data for: ${pokemon_list[*]}"
+echo ""
+
+# Start all Pokémon fetches in parallel
+for pokemon in "${pokemon_list[@]}"; do
+    fetch_pokemon_parallel "$pokemon"
+    # Small delay to avoid overwhelming the API
+    sleep 0.2
+done
+
+echo ""
+echo "All background processes started. Waiting for completion..."
+
+# Wait for all background processes to complete
+for pokemon in "${pokemon_list[@]}"; do
+    pid_file="/tmp/pokemon_${pokemon}.pid"
+    if [ -f "$pid_file" ]; then
+        pid=$(cat "$pid_file")
+        echo "[${pokemon}] Waiting for PID $pid to complete..."
+        wait $pid
+        exit_code=$?
+        
+        if [ $exit_code -eq 0 ]; then
+            echo "[${pokemon}] Process completed successfully ✅"
+        else
+            echo "[${pokemon}] Process failed with exit code $exit_code ❌"
+        fi
+        
+        # Clean up PID file
+        rm -f "$pid_file"
+    fi
+done
+
+echo ""
+echo "Parallel retrieval completed!"
+
+# Display error summary if any errors occurred
+if [ -s "$ERROR_LOG" ] && [ "$(wc -l < "$ERROR_LOG")" -gt 1 ]; then
+    echo ""
+    echo "Error Summary:"
+    echo "Some Pokémon data could not be retrieved. Check ${ERROR_LOG} for details."
+else
+    echo ""
+    echo "All Pokémon data retrieved successfully! 🎉"
+fi
+
+# Display final status
+echo ""
+echo "Final Status:"
+for pokemon in "${pokemon_list[@]}"; do
+    output_file="pokemon_data/${pokemon}.json"
+    if [ -f "$output_file" ] && [ -s "$output_file" ]; then
+        echo "[${pokemon}] Data file exists and is not empty ✅"
+    else
+        echo "[${pokemon}] Data file missing or empty ❌"
+    fi
+done 
