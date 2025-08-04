@@ -9,4 +9,10 @@ awk 'NR==1 {name=$0}
      NR==2 {height=$0/10} 
      NR==3 {weight=$0/10} 
      NR==4 {type=$0} 
-     END {print toupper(substr(name,1,1)) substr(name,2) " is of type " toupper(substr(type,1,1)) substr(type,2) ", weighs " weight "kg, and is " height "m tall."}' 
+     END {
+         formatted_name = toupper(substr(name,1,1)) substr(name,2)
+         formatted_type = toupper(substr(type,1,1)) substr(type,2)
+         formatted_weight = weight
+         formatted_height = height
+         print formatted_name " is of type " formatted_type ", weighs " formatted_weight "kg, and is " formatted_height "m tall."
+     }' 
